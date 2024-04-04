@@ -51,13 +51,13 @@ func main() {
 		//define timeout para a solicitação da API de cotação
 
 		//Crie um contexto com um tempo limite para a solicitação HTTP
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 
 		//Crie uma nova solicitação HTTP com o contexto e o URL da API
 		req, err := http.NewRequestWithContext(ctx, "GET", "https://economia.awesomeapi.com.br/json/last/USD-BRL", nil)
 		if err != nil {
-			log.Fatal(err)
+			log.Fatal("err", err)
 		}
 
 		// Crie um cliente HTTP padrão e envie a solicitação HTTP
@@ -65,7 +65,7 @@ func main() {
 		resp, err := client.Do(req)
 
 		if err != nil {
-			log.Fatal(err)
+			log.Fatal("erro", err)
 		}
 		defer resp.Body.Close()
 
@@ -75,7 +75,7 @@ func main() {
 		var currency Currency
 
 		if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-			log.Fatal(err)
+			log.Fatal("erro0", err)
 		}
 
 		// Acesse o valor desejado pelo índice da estrutura
@@ -90,15 +90,21 @@ func main() {
 		fmt.Println("Valor do dólar : ", currency.Bid)
 		fmt.Println("Valor do code : ", currency.Code)
 		fmt.Println("Valor do name : ", currency.Name)
-
-		// define timeout para o armazenamento da cotação no banco de dados
-		_, cancel = context.WithTimeout(context.Background(), 10000*time.Millisecond)
+		ctx, cancel = context.WithTimeout(ctx, 10*time.Millisecond)
 		defer cancel()
 
-		// armazena a cotação no banco de dados
-		_, err = db.Exec("INSERT INTO cotacoes (valor) VALUES (?)", currency.Bid)
+		// Cria a instrução SQL para inserir a cotação no banco de dados
+		stmt, err := db.PrepareContext(ctx, "INSERT INTO cotacoes (valor) VALUES (?)")
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Fatal("erro BD\n", err)
+			return
+		}
+		defer stmt.Close()
+
+		// Executa a instrução SQL
+		_, err = stmt.ExecContext(ctx, currency.Bid)
+		if err != nil {
+			log.Fatal("erro BD\n", err)
 			return
 		}
 
